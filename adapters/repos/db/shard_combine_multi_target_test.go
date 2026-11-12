@@ -154,6 +154,36 @@ func TestCombiner(t *testing.T) {
 			out:            []search.Result{res(1, 0.95), res(0, 1.23)},
 		},
 		{
+			// https://github.com/weaviate/weaviate/issues/13834: with a
+			// negative (dot) distance threshold, the threshold must be
+			// applied to the combined distance, not to each target. x1
+			// has -0.3 per target, which exceeds the -0.5 threshold on
+			// its own, but its combined distance of -0.6 satisfies it.
+			name:       "sum with negative target distance (issue 13834)",
+			targets:    []string{"a", "b"},
+			joinMethod: &dto.TargetCombination{Type: dto.Sum, Weights: []float32{1, 1}},
+			in: [][]search.Result{
+				{res(0, -0.6), res(1, -0.3), res(2, -0.1), res(3, -0.1)},
+				{res(0, -0.6), res(1, -0.3), res(2, -0.1), res(3, -0.2)},
+			},
+			targetDistance: -0.5,
+			out:            []search.Result{res(0, -1.2), res(1, -0.6)},
+		},
+		{
+			// Mutant from issue 13834: every target distance shifted by
+			// +0.2 and the threshold by the same amount, so the
+			// qualifying set must stay {x0, x1}.
+			name:       "sum with negative target distance, shifted mutant (issue 13834)",
+			targets:    []string{"a", "b"},
+			joinMethod: &dto.TargetCombination{Type: dto.Sum, Weights: []float32{1, 1}},
+			in: [][]search.Result{
+				{res(0, -0.4), res(1, -0.1), res(2, 0.1), res(3, 0.1)},
+				{res(0, -0.4), res(1, -0.1), res(2, 0.1), res(3, 0.0)},
+			},
+			targetDistance: -0.1,
+			out:            []search.Result{res(0, -0.8), res(1, -0.2)},
+		},
+		{
 			name:       "many documents missing entry (weights)",
 			targets:    []string{"target1", "target2", "target3", "target4"},
 			joinMethod: &dto.TargetCombination{Weights: []float32{1, 0.5, 0.25, 0.1}},
@@ -243,7 +273,8 @@ func TestCombiner(t *testing.T) {
 			}
 
 			limit := len(tt.out)
-			if tt.targetDistance > 0 {
+			if tt.targetDistance != 0 {
+				// a target distance means an unlimited (distance) search
 				limit = 100
 			}
 

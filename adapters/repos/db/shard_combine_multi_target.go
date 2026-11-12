@@ -237,7 +237,11 @@ func CombineMultiTargetResults(ctx context.Context, shard DistanceForVector, log
 	uuidCounter := make([]uint64, len(combinedResults))
 	count := uint64(0)
 	for id, res := range combinedResults {
-		if targetDist > 0 && res.distance > targetDist { // targetDist == 0 means no target distance is set
+		// targetDist == 0 means no target distance is set. A negative
+		// threshold (e.g. for dot distance) must filter here too: the
+		// combined distance is the sum of the per-target distances, so
+		// it can only be judged once the targets are combined.
+		if targetDist != 0 && res.distance > targetDist {
 			continue
 		}
 		uuidCounter[count] = id
